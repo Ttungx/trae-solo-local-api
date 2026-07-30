@@ -268,7 +268,12 @@ function handleLlmUtilsStream(responseBody, res, completionId, modelName, saveTo
     if (collectedToolCalls.length > 0) {
       reason = 'tool_calls';
     }
-    const doneChunk = createOpenAIStreamChunk(completionId, modelName, {}, reason);
+    const usage = tokenUsage ? {
+      prompt_tokens: tokenUsage.prompt_tokens || 0,
+      completion_tokens: tokenUsage.completion_tokens || 0,
+      total_tokens: tokenUsage.total_tokens || (tokenUsage.prompt_tokens || 0) + (tokenUsage.completion_tokens || 0),
+    } : undefined;
+    const doneChunk = createOpenAIStreamChunk(completionId, modelName, {}, reason, usage);
     res.write(`data: ${JSON.stringify(doneChunk)}\n\n`);
     res.write('data: [DONE]\n\n');
     res.end();
@@ -892,7 +897,12 @@ async function runOpenAIChatWithFallback({
         catch (e) { console.error('[persist] stream final failed:', e); }
       }
 
-      const doneChunk = createOpenAIStreamChunk(completionId, modelUsed, {}, reason);
+      const usage = lastTokenUsage ? {
+        prompt_tokens: lastTokenUsage.prompt_tokens || 0,
+        completion_tokens: lastTokenUsage.completion_tokens || 0,
+        total_tokens: lastTokenUsage.total_tokens || (lastTokenUsage.prompt_tokens || 0) + (lastTokenUsage.completion_tokens || 0),
+      } : undefined;
+      const doneChunk = createOpenAIStreamChunk(completionId, modelUsed, {}, reason, usage);
       res.write(`data: ${JSON.stringify(doneChunk)}\n\n`);
       res.write('data: [DONE]\n\n');
       res.end();
@@ -1539,7 +1549,7 @@ app.post('/v1/chat/completions', authenticate, async (req, res) => {
         const usage = tokenUsage ? {
           prompt_tokens: tokenUsage.prompt_tokens || 0,
           completion_tokens: tokenUsage.completion_tokens || 0,
-          total_tokens: tokenUsage.total_tokens || 0,
+          total_tokens: tokenUsage.total_tokens || (tokenUsage.prompt_tokens || 0) + (tokenUsage.completion_tokens || 0),
         } : undefined;
 
         const response = createOpenAIChatCompletion(completionId, modelUsed, fullContent, finishReason, fullReasoning, usage, toolCalls);
@@ -1818,7 +1828,7 @@ app.post('/v1/chat/file', authenticate, async (req, res) => {
     const usage = tokenUsage ? {
       prompt_tokens: tokenUsage.prompt_tokens || 0,
       completion_tokens: tokenUsage.completion_tokens || 0,
-      total_tokens: tokenUsage.total_tokens || 0,
+      total_tokens: tokenUsage.total_tokens || (tokenUsage.prompt_tokens || 0) + (tokenUsage.completion_tokens || 0),
     } : undefined;
 
     res.json({

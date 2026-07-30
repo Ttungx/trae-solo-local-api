@@ -39,6 +39,25 @@ const testCases = [
     input: 'Let me read that {"name":"Read","params":{"path":"a.txt"}} for you',
     expect: { name: 'Read', params: { path: 'a.txt' } }
   },
+  // Format 7: Lenient extraction — unescaped quotes inside string values
+  // Model generates: node -e "code" where inner " are not escaped as \"
+  {
+    name: 'F7-lenient-unescaped-quotes',
+    input: '{"name":"bash","params":{"command":"node -e "const fs=require(\'fs\');console.log(1)""}}',
+    expect: { name: 'bash', params: { command: 'node -e "const fs=require(\'fs\');console.log(1)"' } }
+  },
+  // Format 8: Lenient extraction — multiple params with unescaped quotes
+  {
+    name: 'F8-lenient-multiple-params',
+    input: '{"name":"edit","params":{"filePath":"src/server.js","oldString":"const x = "hello"","newString":"const x = "world""}}',
+    expect: { name: 'edit', params: { filePath: 'src/server.js', oldString: 'const x = "hello"', newString: 'const x = "world"' } }
+  },
+  // Format 9: Lenient extraction — no params wrapper, flat fields
+  {
+    name: 'F9-lenient-flat-fields',
+    input: '{"name":"bash","command":"echo "hello world""}',
+    expect: { name: 'bash', params: { command: 'echo "hello world"' } }
+  },
 ];
 
 console.log('=== Toolcall Parser Unit Test ===\n');

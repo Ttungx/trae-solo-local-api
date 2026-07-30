@@ -31,8 +31,8 @@ function createOpenAIChatCompletion(id, model, content, finishReason, reasoning,
   };
 }
 
-function createOpenAIStreamChunk(id, model, delta, finishReason) {
-  return {
+function createOpenAIStreamChunk(id, model, delta, finishReason, usage) {
+  const chunk = {
     id: id || `chatcmpl-${uuidv4()}`,
     object: 'chat.completion.chunk',
     created: Math.floor(Date.now() / 1000),
@@ -43,6 +43,14 @@ function createOpenAIStreamChunk(id, model, delta, finishReason) {
       finish_reason: finishReason || null
     }]
   };
+  if (usage) {
+    chunk.usage = {
+      prompt_tokens: usage.prompt_tokens || 0,
+      completion_tokens: usage.completion_tokens || 0,
+      total_tokens: usage.total_tokens || (usage.prompt_tokens || 0) + (usage.completion_tokens || 0)
+    };
+  }
+  return chunk;
 }
 
 function createOpenAIModels(models) {
@@ -443,11 +451,14 @@ function createOpenAIToolcallStreamFilter(parseToolcallContent) {
         state.inToolCall = false;
         return { emitText: '', finishedToolCalls: tc ? [tc] : [] };
       }
-      // drop incomplete tag — better than leaking raw XML to client as text
-      console.warn('[openai-format] dropping incomplete toolcall buffer at stream end');
+      // No parseable JSON found — the <toolcall> was likely a literal string
+      // in the model's text (e.g. describing code), not a real tool call.
+      // Emit the original buffer as plain text so content is not lost.
+      console.warn('[openai-format] no JSON in toolcall buffer at stream end, emitting as text');
+      const leftover = state.buffer;
       state.buffer = '';
       state.inToolCall = false;
-      return { emitText: '', finishedToolCalls: [] };
+      return { emitText: leftover, finishedToolCalls: [] };
     }
     const leftover = state.buffer;
     state.buffer = '';
