@@ -39,6 +39,7 @@ const {
 } = require('./auto-continue');
 const { getCatalog, getOpenApiDocument } = require('./api-catalog');
 const { sendOpenAIError } = require('./errors');
+const { addTokenUsage } = require('./token-usage');
 
 const app = express();
 app.use(cors());
@@ -810,7 +811,7 @@ async function runOpenAIChatWithFallback({
           ? `${aggregated.fullReasoning}\n${turn.fullReasoning}`
           : turn.fullReasoning;
       }
-      if (turn.tokenUsage) aggregated.tokenUsage = turn.tokenUsage;
+      if (turn.tokenUsage) aggregated.tokenUsage = addTokenUsage(aggregated.tokenUsage, turn.tokenUsage);
       if (turn.toolCalls && turn.toolCalls.length) {
         aggregated.toolCalls = [...(aggregated.toolCalls || []), ...turn.toolCalls];
       }
@@ -867,7 +868,7 @@ async function runOpenAIChatWithFallback({
     let lastShortText = null;
     let aggregateContent = '';
     let aggregateReasoning = '';
-    let lastTokenUsage = null;
+    let aggregateTokenUsage = null;
     let lastToolCalls = [];
     let activeStreamModel = activeModel;
 
@@ -893,14 +894,14 @@ async function runOpenAIChatWithFallback({
       }
 
       if (typeof persistAssistant === 'function') {
-        try { persistAssistant(aggregateContent, aggregateReasoning, lastTokenUsage, lastToolCalls); }
+        try { persistAssistant(aggregateContent, aggregateReasoning, aggregateTokenUsage, lastToolCalls); }
         catch (e) { console.error('[persist] stream final failed:', e); }
       }
 
-      const usage = lastTokenUsage ? {
-        prompt_tokens: lastTokenUsage.prompt_tokens || 0,
-        completion_tokens: lastTokenUsage.completion_tokens || 0,
-        total_tokens: lastTokenUsage.total_tokens || (lastTokenUsage.prompt_tokens || 0) + (lastTokenUsage.completion_tokens || 0),
+      const usage = aggregateTokenUsage ? {
+        prompt_tokens: aggregateTokenUsage.prompt_tokens || 0,
+        completion_tokens: aggregateTokenUsage.completion_tokens || 0,
+        total_tokens: aggregateTokenUsage.total_tokens || (aggregateTokenUsage.prompt_tokens || 0) + (aggregateTokenUsage.completion_tokens || 0),
       } : undefined;
       const doneChunk = createOpenAIStreamChunk(completionId, modelUsed, {}, reason, usage);
       res.write(`data: ${JSON.stringify(doneChunk)}\n\n`);
@@ -1026,7 +1027,7 @@ async function runOpenAIChatWithFallback({
             ? `${aggregateReasoning}\n${turn.fullReasoning}`
             : turn.fullReasoning;
         }
-        if (turn.tokenUsage) lastTokenUsage = turn.tokenUsage;
+        if (turn.tokenUsage) aggregateTokenUsage = addTokenUsage(aggregateTokenUsage, turn.tokenUsage);
         if (turn.toolCalls && turn.toolCalls.length) {
           lastToolCalls = [...lastToolCalls, ...turn.toolCalls];
         }
