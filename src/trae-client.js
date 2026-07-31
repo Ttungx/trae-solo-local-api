@@ -41,17 +41,25 @@ function getModelConfig() {
   return JSON.parse(JSON.stringify(modelConfig));
 }
 
-let fallbackConfig = { autoFallback: true, queueThreshold: 500, mappings: {} };
+const DEFAULT_FALLBACK_CONFIG = { autoFallback: true, queueThreshold: 500, mappings: {} };
+let fallbackConfig = { ...DEFAULT_FALLBACK_CONFIG };
+
+function resolveFallbackConfig(savedConfig, modelFallback) {
+  // model-config.json provides defaults only. A dashboard update is persisted
+  // separately in model-fallback.json and must win across restarts/reloads.
+  return {
+    ...DEFAULT_FALLBACK_CONFIG,
+    ...(modelFallback || {}),
+    ...(savedConfig || {})
+  };
+}
 
 function loadFallbackConfig() {
   try {
-    if (fs.existsSync(FALLBACK_CONFIG_PATH)) {
-      const raw = fs.readFileSync(FALLBACK_CONFIG_PATH, 'utf-8');
-      fallbackConfig = JSON.parse(raw);
-    }
-    if (modelConfig.fallback && Object.keys(modelConfig.fallback).length > 0) {
-      fallbackConfig = { ...fallbackConfig, ...modelConfig.fallback };
-    }
+    const savedConfig = fs.existsSync(FALLBACK_CONFIG_PATH)
+      ? JSON.parse(fs.readFileSync(FALLBACK_CONFIG_PATH, 'utf-8'))
+      : null;
+    fallbackConfig = resolveFallbackConfig(savedConfig, modelConfig.fallback);
   } catch (e) {
     console.error('[fallback] Failed to load config:', e.message);
   }
@@ -852,6 +860,7 @@ module.exports = {
   getNextTierModels,
   findMultimodalModel,
   loadFallbackConfig,
+  resolveFallbackConfig,
   getModelConfig,
   saveModelConfig,
   loadModelConfig,
