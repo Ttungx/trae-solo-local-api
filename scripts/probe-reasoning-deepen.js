@@ -13,7 +13,11 @@ const path = require('path');
 
 const API = process.env.PROBE_API || 'http://localhost:19900/v1/chat/completions';
 const KEY = process.env.API_KEY || 'trae-solo-local-api-key';
-const REPEATS = Math.max(2, parseInt(process.env.PROBE_REPEATS || '2', 10));
+const REPEATS = Math.max(1, parseInt(process.env.PROBE_REPEATS || '2', 10));
+const REQUEST_TIMEOUT_MS = Math.max(
+  1_000,
+  parseInt(process.env.PROBE_REQUEST_TIMEOUT_MS || '300000', 10)
+);
 
 // Short multi-step task — enough to think, not 200s essay
 const USER_TASK =
@@ -38,15 +42,29 @@ const PREFIX = {
     'Consider edge cases, rejected alternatives, and prove each branch. Do not rush.\n\n',
 };
 
-const MODELS = ['glm-5.2', 'DeepSeek-V4-Pro', 'kimi-k2.7-code'];
+const DEFAULT_MODELS = ['glm-5.2', 'DeepSeek-V4-Pro', 'kimi-k2.7-code'];
+const MODELS = (process.env.PROBE_MODELS || DEFAULT_MODELS.join(','))
+  .split(',')
+  .map((model) => model.trim())
+  .filter(Boolean);
 
 // Depth-seeking conditions only (no Low suppress)
-const CONDITIONS = [
+const DEFAULT_CONDITIONS = [
   { id: 'base', prefixKey: 'none' },
   { id: 'max_short', prefixKey: 'max_short' },
   { id: 'max_abs', prefixKey: 'max_abs' },
   { id: 'thorough', prefixKey: 'thorough' },
 ];
+const conditionIds = (process.env.PROBE_CONDITIONS || '')
+  .split(',')
+  .map((condition) => condition.trim())
+  .filter(Boolean);
+const CONDITIONS = conditionIds.length
+  ? DEFAULT_CONDITIONS.filter((condition) => conditionIds.includes(condition.id))
+  : DEFAULT_CONDITIONS;
+if (!CONDITIONS.length) {
+  throw new Error(`No valid PROBE_CONDITIONS: ${process.env.PROBE_CONDITIONS}`);
+}
 
 function buildMessages(prefix) {
   return [
@@ -80,6 +98,7 @@ async function oneCall(model, condition, rep) {
   const prefix = PREFIX[condition.prefixKey];
   const t0 = Date.now();
   const res = await fetch(API, {
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     method: 'POST',
     headers: {
       Authorization: `Bearer ${KEY}`,
@@ -160,7 +179,9 @@ function pad(s, n) {
 }
 
 async function main() {
-  console.log(`API=${API} REPEATS=${REPEATS}`);
+  console.log(
+    `API=${API} REPEATS=${REPEATS} REQUEST_TIMEOUT_MS=${REQUEST_TIMEOUT_MS}`
+  );
   console.log(`Models: ${MODELS.join(', ')}`);
   console.log(`Conditions: ${CONDITIONS.map((c) => c.id).join(', ')}`);
   console.log(

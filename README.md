@@ -1,5 +1,7 @@
 # trae-solo-local-api
 
+> 项目说明（2026-07-31）：TRAE WORK 已改用积分制并取消免费政策，本项目后续随缘更新。仓库中的模型思考 prompt 前缀注入方案可能仍有一定研究价值，欢迎自行研究和验证。
+
 把 **TRAE SOLO (Trae Work)** 包装成本地 OpenAI / Anthropic 兼容 API，供 Claude Code、Cursor、Cline、OpenCode 等调用 SOLO 底层模型。
 
 - **本仓库**：https://github.com/Ttungx/trae-solo-local-api  

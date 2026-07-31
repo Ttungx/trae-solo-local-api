@@ -1,6 +1,6 @@
 {
-  "autoFallback": true,
-  "queueThreshold": 300,
+  "autoFallback": false,
+  "queueThreshold": 99999,
   "mappings": {
     "claude-sonnet-4-6": [
       "glm-5.1",

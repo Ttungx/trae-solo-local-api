@@ -31,6 +31,9 @@ const {
   applyThinkEffort,
   extractThinkEffortFromBody,
   getThinkEffortSupport,
+  getDefaultThinkEffort,
+  resolveRequestThinkEffort,
+  THINK_EFFORT_INJECTION,
 } = require('./think-effort');
 const {
   getContinueLimits,
@@ -1404,15 +1407,18 @@ app.post('/v1/chat/completions', authenticate, async (req, res) => {
     if (config_name) options.config_name = config_name;
     if (workspace_dir) options.workspace_dir = workspace_dir;
     options.workspace = extractWorkspace(req);
-    // think_effort is applied to messages in-process; keep raw value for fallback re-bind
-    if (thinkEffort != null) options.think_effort = thinkEffort;
-    else if (sessionId) {
-      try {
-        const sess = sessionsRepo.getSession(sessionId);
-        if (sess?.config?.think_effort != null && sess.config.think_effort !== '' && sess.config.think_effort !== 'auto') {
-          options.think_effort = sess.config.think_effort;
-        }
-      } catch (e) { /* ignore */ }
+    // think_effort: body > session > env THINK_EFFORT (default auto/off)
+    {
+      let sessionEffort = null;
+      if (sessionId) {
+        try {
+          const sess = sessionsRepo.getSession(sessionId);
+          if (sess?.config?.think_effort != null && sess.config.think_effort !== '') {
+            sessionEffort = sess.config.think_effort;
+          }
+        } catch (e) { /* ignore */ }
+      }
+      options.think_effort = resolveRequestThinkEffort(thinkEffort, sessionEffort);
     }
 
     // Phase 4: Forward sampling params from request body (explicit) or session config
@@ -1443,10 +1449,10 @@ app.post('/v1/chat/completions', authenticate, async (req, res) => {
       }
     }
 
-    // Initial think_effort bind after options/session defaults resolved.
+    // Initial think_effort bind after options/session/env resolved.
     // Fallback path re-applies with the active config_name each attempt.
     {
-      const effort = options.think_effort != null ? options.think_effort : thinkEffort;
+      const effort = options.think_effort;
       const cfg = options.config_name || resolveModelId(modelName) || modelName;
       const { meta } = applyThinkEffort(messages, cfg, effort);
       console.log(
@@ -3207,6 +3213,7 @@ app.listen(PORT, () => {
   console.log(`[Trae Local API] Agent tools: read_file, write_file, list_files, search_internet, fetch_url, execute_command`);
   console.log(`[Trae Local API] Workspace dir: ${WORKSPACE_DIR || 'not set'}`);
   console.log(`[Trae Local API] Auto-continue: ${AUTO_CONTINUE ? `enabled (max ${MAX_CONTINUES})` : 'disabled'}`);
+  console.log(`[Trae Local API] Think-effort injection: ${THINK_EFFORT_INJECTION ? 'enabled' : 'disabled'} (THINK_EFFORT_INJECTION env)`);
   if (OUTPUT_SYNC_DIR) {
     console.log(`[Trae Local API] Output sync dir: ${OUTPUT_SYNC_DIR}`);
   }

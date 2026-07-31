@@ -15,6 +15,14 @@
 const MARKER_START = '<<think_effort>>\n';
 const MARKER_END = '\n<</think_effort>>\n\n';
 
+/**
+ * Master switch for prompt injection.
+ * Set THINK_EFFORT_INJECTION=false to completely disable our prepending logic.
+ * This lets the model use its native behavior (e.g. GLM-5.2 template default Max).
+ * Default: true (injection enabled).
+ */
+const THINK_EFFORT_INJECTION = process.env.THINK_EFFORT_INJECTION !== 'false';
+
 /** Canonical Absolute-maximum prefix (DeepSeek encoding README + Kimi deepen). */
 const PREFIX_MAX_ABS =
   'Reasoning Effort: Absolute maximum with no shortcuts permitted. ' +
@@ -218,6 +226,15 @@ function prependToSystemContent(content, block) {
  */
 function applyThinkEffort(messages, modelOrConfig, rawEffort) {
   const list = Array.isArray(messages) ? messages : [];
+
+  // Master switch: when disabled, never inject and never strip markers
+  if (!THINK_EFFORT_INJECTION) {
+    return {
+      messages: list,
+      meta: { injected: false, reason: 'injection_disabled' }
+    };
+  }
+
   const meta = resolveThinkEffort(modelOrConfig, rawEffort);
   const block = meta.injected ? wrapPrefix(meta.prefix) : '';
 
@@ -296,6 +313,40 @@ function extractThinkEffortFromBody(body) {
   return null;
 }
 
+/**
+ * Process-wide default when body/session omit think_effort.
+ * Env THINK_EFFORT: auto|off|low|high|max (default auto = no inject).
+ * Set THINK_EFFORT=off for OpenCode baseline (rely on model native default, e.g. GLM Max).
+ */
+function getDefaultThinkEffort() {
+  if (!THINK_EFFORT_INJECTION) {
+    return 'off';
+  }
+  const raw = process.env.THINK_EFFORT;
+  if (raw == null || raw === '') {
+    return 'max';  // default to max so that supported models (glm-5.2) get the reasoning effort prompt injected
+  }
+  const n = normalizeEffort(raw);
+  return n != null ? n : 'max';
+}
+
+/**
+ * Resolve effort: body > session > env default.
+ * @param {*} bodyEffort - from extractThinkEffortFromBody
+ * @param {*} sessionEffort - optional session config.think_effort
+ */
+function resolveRequestThinkEffort(bodyEffort, sessionEffort) {
+  if (bodyEffort != null && bodyEffort !== '') return bodyEffort;
+  if (
+    sessionEffort != null &&
+    sessionEffort !== '' &&
+    String(sessionEffort).toLowerCase() !== 'auto'
+  ) {
+    return sessionEffort;
+  }
+  return getDefaultThinkEffort();
+}
+
 module.exports = {
   applyThinkEffort,
   resolveThinkEffort,
@@ -303,7 +354,10 @@ module.exports = {
   normalizeEffort,
   getThinkEffortSupport,
   extractThinkEffortFromBody,
+  getDefaultThinkEffort,
+  resolveRequestThinkEffort,
   stripThinkEffortMarker,
+  THINK_EFFORT_INJECTION,
   FAMILIES,
   PREFIX_MAX_ABS,
   PREFIX_MAX_SHORT,

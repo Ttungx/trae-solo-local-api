@@ -552,10 +552,10 @@
     }
   },
   "fallback": {
-    "autoFallback": true,
-    "queueThreshold": 50,
-    "tieredFallback": true,
-    "raceWithinTier": true,
+    "autoFallback": false,
+    "queueThreshold": 99999,
+    "tieredFallback": false,
+    "raceWithinTier": false,
     "fallbackModel": "Doubao-Seed-2.0-Code",
     "mappings": {
       "claude-sonnet-4-6": [
